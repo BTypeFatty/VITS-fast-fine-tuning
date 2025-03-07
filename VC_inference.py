@@ -10,6 +10,7 @@ from models import SynthesizerTrn
 import gradio as gr
 import librosa
 import webbrowser
+from pyngrok import ngrok, conf
 
 from text import text_to_sequence, _clean_text
 device = "cuda:0" if torch.cuda.is_available() else "cpu"
@@ -88,10 +89,13 @@ if __name__ == "__main__":
     parser.add_argument("--model_dir", default="./G_latest.pth", help="directory to your fine-tuned model")
     parser.add_argument("--config_dir", default="./finetune_speaker.json", help="directory to your model config file")
     parser.add_argument("--share", default=False, help="make link public (used in colab)")
+    parser.add_argument("--ngrok_authtoken", required=True, help="Your ngrok authtoken")
 
     args = parser.parse_args()
     hps = utils.get_hparams_from_file(args.config_dir)
 
+    # 配置 ngrok 使用 authtoken
+    conf.get_default().auth_token = args.ngrok_authtoken
 
     net_g = SynthesizerTrn(
         len(hps.symbols),
@@ -131,8 +135,8 @@ if __name__ == "__main__":
                             录制或上传声音，并选择要转换的音色。
             """)
             with gr.Column():
-                record_audio = gr.Audio(label="record your voice", source="microphone")
-                upload_audio = gr.Audio(label="or upload audio here", source="upload")
+                record_audio = gr.Audio(label="record your voice", sources=["microphone"])
+                upload_audio = gr.Audio(label="or upload audio here",  sources=["upload"])
                 source_speaker = gr.Dropdown(choices=speakers, value=speakers[0], label="source speaker")
                 target_speaker = gr.Dropdown(choices=speakers, value=speakers[0], label="target speaker")
             with gr.Column():
@@ -142,5 +146,9 @@ if __name__ == "__main__":
             btn.click(vc_fn, inputs=[source_speaker, target_speaker, record_audio, upload_audio],
                       outputs=[message_box, converted_audio])
     webbrowser.open("http://127.0.0.1:7860")
+
+    # 使用 pyngrok 启动 ngrok 并获取公网 URL
+    public_url = ngrok.connect(7860).public_url
+    print(f"Gradio application is available at {public_url}")
     app.launch(share=args.share)
 
